@@ -1,8 +1,33 @@
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
-#include <string>
+#include <optional>
+#include <ostream>
 #include <sstream>
+#include <string>
+#include <unistd.h>
 #include <vector>
+
+std::optional<std::filesystem::path> findExecutable(const std::string& command) {
+    if (const char* path = std::getenv("PATH")) {
+        std::stringstream stream(path);
+        std::string directory;
+
+        while (std::getline(stream, directory, ':')) {
+            auto fullPath = std::filesystem::path(directory) / command;
+            // TODO: handle empty path (current directory)
+
+            if (std::filesystem::exists(fullPath)) {
+                // Check if user has execute permisssion for file
+                if (access(fullPath.c_str(), X_OK) == 0) {
+                    return fullPath;
+                }
+            }
+        }
+    }
+
+    return std::nullopt;
+}
 
 int main() {
     // Flush after every std::cout / std:cerr
@@ -24,7 +49,7 @@ int main() {
             break;
 
         } else if (command == "echo") {
-            iss >> arg;
+            std::getline(iss >> std::ws, arg);
             std::cout << arg << std::endl;
 
         } else if (command == "type") {
@@ -33,7 +58,12 @@ int main() {
             if (std::find(builtins.begin(), builtins.end(), arg) != builtins.end()) {
                 std::cout << arg << " is a shell builtin" << std::endl;
             } else {
-                std::cout << arg << ": not found" << std::endl;
+                // Seach PATH for executable
+                if (auto execPath = findExecutable(arg)) {
+                    std::cout << command << " is " << execPath.value().c_str() << std::endl;
+                } else {
+                    std::cout << arg << ": not found" << std::endl;
+                }
             }
 
         } else {
